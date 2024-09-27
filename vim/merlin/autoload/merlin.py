@@ -365,15 +365,15 @@ def command_holes():
 def vim_complete_prepare(str):
     return re.sub(re_wspaces, " ", str).replace("'", "''").strip()
 
-def vim_complete_prepare_preserve_newlines(str):
-    return re.sub(re_spaces_around_nl, "\n", re.sub(re_spaces, " ", str)).replace("'", "''").strip()
-
+# Turns Merlin's search-by-polarity or complete-prefix entries into a Vim's completion-item list
 def vim_fillentries(entries, vimvar):
-    prep = vim_complete_prepare
-    prep_nl = vim_complete_prepare_preserve_newlines
     for prop in entries:
-        vim.command("let tmp = {'word':'%s','menu':'%s','info':'%s','kind':'%s'}" %
-                (prep(prop['name']),prep(prop['desc']),prep_nl(prop['info']),prep(prop['kind'][:1])))
+        vim.command("let tmp = " + vim_record({
+                "word": prop["name"],
+                "menu": prop["desc"],
+                "info": prop["info"],
+                "kind": prop["kind"][:1]
+            }))
         vim.command("call add(%s, tmp)" % vimvar)
 
 # Complete
@@ -429,6 +429,19 @@ def vim_polarity_search(query, vimvar):
     try:
         l = command("search-by-polarity", "-query", query, "-position", fmtpos(vim.current.window.cursor))
         vim_fillentries(l['entries'], vimvar)
+    except MerlinExc as e:
+        try_print_error(e)
+
+# search-by-type is introduced in https://github.com/ocaml/merlin/pull/1828
+def vim_search_by_type(query, vimvar):
+    def completion_item_of_result(e):
+        return { "word": e["name"], "menu": ": %s" % e["type"] }
+    vim.command("let %s = []" % vimvar)
+    try:
+        l = command("search-by-type", "-query", query, "-position", fmtpos(vim.current.window.cursor))
+        for r in l:
+            item = completion_item_of_result(r)
+            vim.command("call add(%s, %s)" % (vimvar, vim_record(item)))
     except MerlinExc as e:
         try_print_error(e)
 
